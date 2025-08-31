@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FRESHLYTIX</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <h1>FRESHLYTIX</h1>
+    {% if not filename %}
+    <div class="upload-card">
+        <div class="upload-area" id="drop-area">
+            <i class="fas fa-cloud-upload-alt fa-3x" style="color: var(--secondary-color)"></i>
+            <div class="upload-text">Drop your image here</div>
+            <div class="upload-subtext">or click to browse</div>
+            <form action="/" method="post" enctype="multipart/form-data" id="upload-form">
+                <input type="file" name="file" id="file-input" accept="image/*" required>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if filename %}
+    <div class="result-container">
+        <div class="image-card">
+            <h2>Analysis Result</h2>
+            <div class="detection-info">
+                <p class="detected-item">{{ name }}</p>
+                <p class="{{ 'fresh' if result == 'Fresh' else 'rotten' }}">
+                    <i class="fas {{ 'fa-check-circle' if result == 'Fresh' else 'fa-times-circle' }}"></i>
+                    {{ result }}
+                </p>
+            </div>
+            <div class="image-container">
+                <img src="{{ url_for('static', filename='uploads/' + filename) }}" alt="{{ name }}">
+            </div>
+            <div class="button-group">
+                <form action="/" method="post" enctype="multipart/form-data" id="reupload-form">
+                    <input type="file" name="file" id="reupload-input" accept="image/*" required class="hidden-upload">
+                </form>
+                <button class="reupload-btn" onclick="document.getElementById('reupload-input').click()">
+                    <i class="fas fa-sync-alt"></i>
+                    New Image
+                </button>
+                {% if result == "Fresh" %}
+                <button class="download-btn" onclick="downloadPDF()">
+                    <i class="fas fa-file-download"></i>
+                    Export PDF
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if result == "Fresh" and nutrition %}
+        <div class="nutrition-card" id="nutrition-info">
+            <div class="nutrition-facts">
+                <div class="nutrition-facts-header">
+                    <div class="nutrition-facts-title">{{ name }} Nutrition Facts</div>
+                    <div class="serving-size">per 100g serving</div>
+                </div>
+                
+                <div class="nutrition-content">
+                    <div class="table-container">
+                        <table class="nutrition-table">
+                            <thead>
+                                <tr>
+                                    <th>Nutrient</th>
+                                    <th>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for nutrient, value in nutrition.items() %}
+                                <tr>
+                                    <td>{{ nutrient }}</td>
+                                    <td class="value {% if 'Vitamin' in nutrient or 'Protein' in nutrient %}value-highlight{% endif %}">
+                                        {{ value }}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% elif result == "Rotten" %}
+        <div class="warning-card result-card">
+            <i class="fas fa-exclamation-triangle fa-3x"></i>
+            <h3>Warning</h3>
+            <p>This item appears to be spoiled and is not safe for consumption.</p>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <script>
+        window.onload = function() {
+            // Clear any previous file data on refresh
+            if (window.performance && window.performance.navigation.type === window.performance.navigation.TYPE_RELOAD) {
+                window.location.href = '/';
+            }
+        }
+        
+        const dropArea = document.getElementById('drop-area');
+        const fileInput = document.getElementById('file-input');
+        const uploadForm = document.getElementById('upload-form');
+
+        if (dropArea) {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+
+            function highlight(e) {
+                dropArea.classList.add('dragover');
+            }
+
+            function unhighlight(e) {
+                dropArea.classList.remove('dragover');
+            }
+
+            dropArea.addEventListener('drop', handleDrop, false);
+            dropArea.addEventListener('click', () => fileInput.click());
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                fileInput.files = files;
+                uploadForm.submit();
+            }
+
+            fileInput.addEventListener('change', () => {
+                uploadForm.submit();
+            });
+        }
+
+        function downloadPDF() {
+            const element = document.querySelector('#nutrition-info');
+            
+            const pdfContainer = document.createElement('div');
+            pdfContainer.style.cssText = `
+                background: linear-gradient(150deg, #ffffff, #fafafa);
+                padding: 48px;
+                width: 794px;
+                font-family: 'Plus Jakarta Sans', sans-serif;
+                color: #1f1f1f;
+                position: relative;
+                box-sizing: border-box;
+            `;
+
+            // Enhanced header with branding
+            const headerSection = document.createElement('div');
+            headerSection.style.cssText = `
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 48px;
+                padding-bottom: 24px;
+                border-bottom: 3px solid #1f1f1f;
+            `;
+            
+            const currentDate = new Date().toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            headerSection.innerHTML = `
+                <div style="position: relative;">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <h1 style="font-size: 36px; color: #1f1f1f; margin: 0; font-weight: 800; letter-spacing: -0.025em;">
+                            FRESHLYTIX
+                        </h1>
+                    </div>
+                    <div style="font-size: 16px; color: #4a4a4a; margin-top: 8px;">
+                        Advanced Freshness Analysis Report
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="padding: 16px; background: #f5f5f5; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                        <div style="color: #4a4a4a; font-size: 13px; margin-bottom: 8px;">REPORT DETAILS</div>
+                        <div style="font-weight: 600; color: #1f1f1f; margin-bottom: 4px;">
+                            #${Math.random().toString(36).substr(2, 9).toUpperCase()}
+                        </div>
+                        <div style="color: #4a4a4a; font-size: 14px;">${currentDate}</div>
+                    </div>
+                </div>
+            `;
+
+            // Create document content
+            const contentWrapper = document.createElement('div');
+            contentWrapper.style.cssText = `
+                background: white;
+                border-radius: 16px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+                overflow: hidden;
+                margin-bottom: 32px;
+            `;
+
+            // Extract and style nutritional content
+            const nutritionContent = element.querySelector('.nutrition-facts').cloneNode(true);
+            nutritionContent.style.cssText = `
+                padding: 32px;
+                background: white;
+            `;
+
+            // Style the table with zebra striping
+            const table = nutritionContent.querySelector('.nutrition-table');
+            if (table) {
+                table.style.cssText = `
+                    width: 100%;
+                    border-collapse: separate;
+                    border-spacing: 0;
+                    margin-top: 24px;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 8px;
+                    overflow: hidden;
+                `;
+
+                const rows = table.querySelectorAll('tr');
+                rows.forEach((row, index) => {
+                    row.style.backgroundColor = index % 2 === 0 ? '#fafafa' : 'white';
+                });
+            }
+
+            // Modern footer design
+            const footer = document.createElement('div');
+            footer.style.cssText = `
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-top: 48px;
+                padding-top: 24px;
+                border-top: 2px solid #e0e0e0;
+                color: #4a4a4a;
+            `;
+            
+            footer.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="font-weight: 600; color: #1f1f1f;">FRESHLYTIX</span>
+                    <span style="color: #757575;">•</span>
+                    <span>Freshness Analysis Report</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 24px;">
+                    <div style="font-size: 13px;">Page 1 of 1</div>
+                    <div style="color: #1f1f1f; font-weight: 600;">www.freshlytix.com</div>
+                </div>
+            `;
+
+            // Assemble the PDF
+            contentWrapper.appendChild(nutritionContent);
+            pdfContainer.appendChild(headerSection);
+            pdfContainer.appendChild(contentWrapper);
+            pdfContainer.appendChild(footer);
+
+            // PDF generation options
+            const opt = {
+                margin: [16, 16, 16, 16],
+                filename: '{{ name }}_freshness_report.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, logging: true },
+                jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' }
+            };
+
+            // Generate PDF
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'position: fixed; top: 0; left: 0; opacity: 0;';
+            wrapper.appendChild(pdfContainer);
+            document.body.appendChild(wrapper);
+
+            html2pdf().from(pdfContainer).set(opt).save()
+                .then(() => document.body.removeChild(wrapper))
+                .catch(err => {
+                    console.error('PDF Generation Error:', err);
+                    document.body.removeChild(wrapper);
+                });
+        }
+        
+        // Add reupload functionality
+        const reuploadInput = document.getElementById('reupload-input');
+        const reuploadForm = document.getElementById('reupload-form');
+        
+        if (reuploadInput) {
+            reuploadInput.addEventListener('change', () => {
+                reuploadForm.submit();
+            });
+        }
+    </script>
+</body>
+</html>
