@@ -1,4 +1,4 @@
-flask==2.0.1
+flask
 gunicorn
 torch
 torchvision
@@ -6,4 +6,5 @@ torchaudio
 numpy
 pandas
 scikit-learn
+werkzeug
 
